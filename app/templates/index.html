@@ -1,0 +1,449 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IC Stack Builder</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+        .component-panel {
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            height: 85vh;
+            overflow-y: auto;
+        }
+
+        .stack-container {
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            height: 85vh;
+            background-color: #f8f9fa;
+            position: relative;
+        }
+
+        .component-item {
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: white;
+            cursor: move;
+        }
+
+        .stack-layer {
+            border: 1px solid #6c757d;
+            border-radius: 5px;
+            margin-bottom: 5px;
+            padding: 10px;
+            background-color: white;
+            width: 100%;
+            position: relative;
+        }
+
+        .die-layer {
+            background-color: #d1e7dd;
+        }
+
+        .material-layer {
+            background-color: #cfe2ff;
+        }
+
+        .layer-handle {
+            cursor: move;
+            padding: 5px;
+        }
+
+        .layer-controls {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+        }
+
+        .thickness-control {
+            width: 100px;
+            display: inline-block;
+            margin-right: 10px;
+        }
+
+        .delete-layer {
+            cursor: pointer;
+            color: #dc3545;
+        }
+
+        .dropzone {
+            min-height: 100px;
+            border: 2px dashed #ced4da;
+            border-radius: 5px;
+            margin-top: 20px;
+            padding: 20px;
+            text-align: center;
+            color: #6c757d;
+        }
+
+        .dropzone.active {
+            border-color: #198754;
+            background-color: rgba(25, 135, 84, 0.1);
+        }
+
+        .layer-property {
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        #analysis-results {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row mt-3">
+            <div class="col-12">
+                <h1>IC Stack Builder</h1>
+                <p class="lead">Drag and drop components to build your IC stack</p>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Component Panel -->
+            <div class="col-md-3">
+                <div class="component-panel">
+                    <h4>Available Components</h4>
+
+                    <div class="mt-4">
+                        <h5>Dies</h5>
+                        <div id="dies-container">
+                            {% for die in components.dies %}
+                            <div class="component-item"
+                                 data-id="{{ die.id }}"
+                                 data-name="{{ die.name }}"
+                                 data-thickness="{{ die.thickness }}"
+                                 data-thermal-conductivity="{{ die.thermal_conductivity }}"
+                                 data-type="{{ die.type }}">
+                                <b>{{ die.name }}</b>
+                                <div class="layer-property">Thickness: {{ die.thickness }} mm</div>
+                                <div class="layer-property">Thermal Conductivity: {{ die.thermal_conductivity }} W/mK</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <h5>Materials</h5>
+                        <div id="materials-container">
+                            {% for material in components.materials %}
+                            <div class="component-item"
+                                 data-id="{{ material.id }}"
+                                 data-name="{{ material.name }}"
+                                 data-thermal-conductivity="{{ material.thermal_conductivity }}"
+                                 data-type="{{ material.type }}">
+                                <b>{{ material.name }}</b>
+                                <div class="layer-property">Thermal Conductivity: {{ material.thermal_conductivity }} W/mK</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stack Building Area -->
+            <div class="col-md-6">
+                <div class="stack-container">
+                    <h4>IC Stack</h4>
+                    <p>Drag components here to build your stack (top to bottom)</p>
+
+                    <div id="stack-dropzone" class="dropzone">
+                        <div class="stack-placeholder">Drop components here to build your stack</div>
+                        <div id="stack-layers"></div>
+                    </div>
+
+                    <div class="d-flex justify-content-between mt-3">
+                        <button id="save-stack" class="btn btn-primary">Save Stack</button>
+                        <button id="analyze-stack" class="btn btn-success">Analyze Stack</button>
+                        <button id="clear-stack" class="btn btn-danger">Clear Stack</button>
+                    </div>
+
+                    <div id="analysis-results"></div>
+                </div>
+            </div>
+
+            <!-- Properties Panel -->
+            <div class="col-md-3">
+                <div class="component-panel">
+                    <h4>Properties</h4>
+                    <div id="properties-panel">
+                        <p class="text-muted">Select a component to view or edit its properties</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            new Sortable(document.getElementById('dies-container'), {
+                group: {
+                    name: 'components',
+                    pull: 'clone',
+                    put: false
+                },
+                sort: false,
+                animation: 150,
+                onClone: function(evt) {
+                    evt.item.classList.add('component-clone');
+                }
+            });
+
+            new Sortable(document.getElementById('materials-container'), {
+                group: {
+                    name: 'components',
+                    pull: 'clone',
+                    put: false
+                },
+                sort: false,
+                animation: 150,
+                onClone: function(evt) {
+                    evt.item.classList.add('component-clone');
+                }
+            });
+
+            // Make stack dropzone sortable
+            const stackSortable = new Sortable(document.getElementById('stack-layers'), {
+                group: {
+                    name: 'components',
+                    pull: false,
+                    put: true
+                },
+                animation: 150,
+                onAdd: function(evt) {
+                    // Convert dragged component to a stack layer
+                    const originalItem = evt.item;
+                    const id = originalItem.getAttribute('data-id');
+                    const name = originalItem.getAttribute('data-name');
+                    const thickness = parseFloat(originalItem.getAttribute('data-thickness') || 0.1);
+                    const thermalConductivity = parseFloat(originalItem.getAttribute('data-thermal-conductivity') || 0);
+                    const type = originalItem.getAttribute('data-type');
+
+                    // Create a proper stack layer
+                    const layerElement = document.createElement('div');
+                    layerElement.className = `stack-layer ${type === 'die' ? 'die-layer' : 'material-layer'}`;
+                    layerElement.setAttribute('data-id', id);
+                    layerElement.setAttribute('data-name', name);
+                    layerElement.setAttribute('data-thickness', thickness);
+                    layerElement.setAttribute('data-thermal-conductivity', thermalConductivity);
+                    layerElement.setAttribute('data-type', type);
+
+                    layerElement.innerHTML = `
+                        <div class="layer-handle">
+                            <b>${name}</b>
+                            <div class="layer-property">Thickness:
+                                <input type="number" class="form-control form-control-sm thickness-control"
+                                       value="${thickness}" min="0.01" step="0.01"
+                                       onchange="updateLayerProperty(this, 'thickness')"> mm
+                            </div>
+                            <div class="layer-property">Thermal Conductivity: ${thermalConductivity} W/mK</div>
+                        </div>
+                        <div class="layer-controls">
+                            <span class="delete-layer" onclick="removeLayer(this)">✕</span>
+                        </div>
+                    `;
+
+                    // Replace the cloned item with our custom layer
+                    originalItem.parentNode.replaceChild(layerElement, originalItem);
+
+                    updateStackVisual();
+                },
+                onChange: function() {
+                    updateStackVisual();
+                }
+            });
+
+            // Dropzone highlight effect
+            const dropzone = document.getElementById('stack-dropzone');
+            dropzone.addEventListener('dragover', function() {
+                this.classList.add('active');
+            });
+
+            dropzone.addEventListener('dragleave', function() {
+                this.classList.remove('active');
+            });
+
+            dropzone.addEventListener('drop', function() {
+                this.classList.remove('active');
+            });
+
+            // Button handlers
+            document.getElementById('save-stack').addEventListener('click', saveStack);
+            document.getElementById('analyze-stack').addEventListener('click', analyzeStack);
+            document.getElementById('clear-stack').addEventListener('click', clearStack);
+
+            // Initial update
+            updateStackVisual();
+        });
+
+        // Update layer property when input changes
+        function updateLayerProperty(input, property) {
+            const layer = input.closest('.stack-layer');
+            const value = parseFloat(input.value);
+            layer.setAttribute(`data-${property}`, value);
+            updateStackVisual();
+        }
+
+        // Remove a layer from the stack
+        function removeLayer(button) {
+            const layer = button.closest('.stack-layer');
+            layer.parentNode.removeChild(layer);
+            updateStackVisual();
+        }
+
+        // Update the visual representation of the stack
+        function updateStackVisual() {
+            const stackLayers = document.getElementById('stack-layers');
+            const placeholder = document.querySelector('.stack-placeholder');
+
+            if (stackLayers.children.length === 0) {
+                placeholder.style.display = 'block';
+            } else {
+                placeholder.style.display = 'none';
+            }
+        }
+
+        // Save the current stack configuration
+        function saveStack() {
+            const stackData = getStackData();
+
+            fetch('/save_stack', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(stackData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('Stack saved successfully!');
+                console.log(data);
+
+                // ✅ Redirect to your Streamlit app (adjust the URL if needed)
+                window.location.href = 'http://localhost:8501';
+            })
+            .catch(error => {
+                console.error('Error saving stack:', error);
+                alert('Error saving stack');
+            });
+        }
+
+        // Analyze the current stack
+        function analyzeStack() {
+            const stackData = getStackData();
+
+            if (stackData.length === 0) {
+                alert('Stack is empty. Please add components first.');
+                return;
+            }
+
+            fetch('/analyze_stack', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(stackData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                displayAnalysisResults(data);
+            })
+            .catch(error => {
+                console.error('Error analyzing stack:', error);
+                alert('Error analyzing stack');
+            });
+        }
+
+        // Display analysis results
+        function displayAnalysisResults(results) {
+            const resultsElement = document.getElementById('analysis-results');
+            resultsElement.style.display = 'block';
+
+            resultsElement.innerHTML = `
+                <h5>Analysis Results</h5>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title">Total Thickness</h6>
+                                <p class="card-text">${results.total_thickness.toFixed(3)} mm</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title">Avg Thermal Conductivity</h6>
+                                <p class="card-text">${results.avg_thermal_conductivity.toFixed(2)} W/mK</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title">Thermal Resistance</h6>
+                                <p class="card-text">${typeof results.thermal_resistance === 'number' ?
+                                    results.thermal_resistance.toFixed(4) + ' K/W' : results.thermal_resistance}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <h6>Stack Configuration</h6>
+                    <pre>${JSON.stringify(results.stack_analysis, null, 2)}</pre>
+                </div>
+            `;
+        }
+
+        // Clear the stack
+        function clearStack() {
+            if (confirm('Are you sure you want to clear the stack?')) {
+                document.getElementById('stack-layers').innerHTML = '';
+                document.getElementById('analysis-results').style.display = 'none';
+                updateStackVisual();
+            }
+        }
+
+        const DEFAULTS = {
+            rho_0: 1.0,  // ohm-m
+            alpha: 0.004  // 1/K
+        };
+
+        // Get the current stack data as an array
+        function getStackData() {
+            const stackLayers = document.querySelectorAll('#stack-layers .stack-layer');
+            const data = [];
+
+            stackLayers.forEach(layer => {
+                data.push({
+                    id: layer.getAttribute('data-id'),
+                    name: layer.getAttribute('data-name'),
+                    type: layer.getAttribute('data-type'),
+                    thickness: parseFloat(layer.getAttribute('data-thickness')),
+                    thermal_conductivity: parseFloat(layer.getAttribute('data-thermal-conductivity')),
+                    rho_0: DEFAULTS.rho_0,
+                    alpha: DEFAULTS.alpha
+                });
+            });
+
+            return data;
+        }
+    </script>
+</body>
+</html>

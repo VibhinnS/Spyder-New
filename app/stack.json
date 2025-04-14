@@ -1,0 +1,11 @@
+[
+  {
+    "id": "cpu_die",
+    "name": "CPU Die",
+    "type": "die",
+    "thickness": 0.5,
+    "thermal_conductivity": 150,
+    "rho_0": 1,
+    "alpha": 0.004
+  }
+]
