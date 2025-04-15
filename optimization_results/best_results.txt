@@ -1,0 +1,18 @@
+Best Parameters:
+Voltage (V): 6.085147737348716
+Thermal Conductivity (W/m-K): 3.8559432569565764
+IC Size (mm): 9.879967887168892
+Clock Frequency (GHz): 1.5014560227253462
+
+Best Metrics:
+max_temperature: 300.1464491724145
+temperature_range: 0.2617753340797435
+max_thermal_gradient: 289.8599499339101
+clock_skew: 4.643358905048304e-16
+cpu_time: 7.036377906799316
+normalized_cost: 0.3275825299023548
+evaluation_time: 7.036459684371948
+
+Best Cost: 0.3275825299023548
+Total Evaluations: 1
+Total Time: 7.036601781845093 seconds

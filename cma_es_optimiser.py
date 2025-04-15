@@ -10,6 +10,9 @@ class OptimizationResult:
     """Class to store and analyze optimization results"""
     
     def __init__(self):
+        self.reset()
+
+    def reset(self):
         self.evaluations = []
         self.best_params = None
         self.best_metrics = None
@@ -101,9 +104,8 @@ def evaluate_design(params):
         List of design parameters:
         [0] V_boundary - Applied voltage (V)
         [1] k_0 - Thermal conductivity (W/m-K)
-        [2] nx - Number of elements in x direction
-        [3] Lx - Physical length in x direction (mm)
-        [4] clock_frequency - Clock frequency (GHz)
+        [2] Lx - Physical length in x direction (mm)
+        [3] clock_frequency - Clock frequency (GHz)
     
     Returns:
     --------
@@ -113,33 +115,19 @@ def evaluate_design(params):
     # Unpack parameters
     V_boundary = params[0]
     k_0 = params[1]
-    nx = int(params[2])
+    Lx = params[2] / 1000.0  # Convert from mm to m
+    clock_frequency = params[3] * 1e9  # Convert from GHz to Hz
+    
+    # FIXED MESH SIZE - not part of optimization parameters anymore
+    nx = 20  # Fixed mesh size
     ny = nx  # Keep mesh elements uniform
     nz = nx  # Keep mesh elements uniform
-    Lx = params[3] / 1000.0  # Convert from mm to m
+    
     Ly = Lx  # Square base
     Lz = Lx * 0.2  # Typical IC aspect ratio (height = 20% of length)
-    clock_frequency = params[4] * 1e9  # Convert from GHz to Hz
-    
-    if nx > 30:  # Limit to 15³ elements maximum
-        print(f"⚠️ Limiting mesh resolution from {nx} to 15 to prevent memory issues")
-        nx = 15
-        params[2] = 15.0
-
-    approx_dofs = nx**3 * 3  # 3 unknowns per node
-    approx_memory_gb = approx_dofs * approx_dofs * 8 / (1024**3)  # rough estimate
-    
-    if approx_memory_gb > 16:  # Adjust based on your system's RAM
-        print(f"⚠️ Estimated memory usage too high ({approx_memory_gb:.1f} GB). Reducing mesh.")
-        while approx_memory_gb > 16 and nx > 15:
-            nx -= 5
-            params[2] = float(nx)
-            approx_dofs = nx**3 * 3
-            approx_memory_gb = approx_dofs * approx_dofs * 8 / (1024**3)
-        print(f"Adjusted mesh resolution to {nx}")
 
     # Print current evaluation parameters
-    print(f"\nEvaluating: V={V_boundary:.2f}V, k={k_0:.2f}W/m-K, mesh={nx}x{ny}x{nz}, " 
+    print(f"\nEvaluating: V={V_boundary:.2f}V, k={k_0:.2f}W/m-K, mesh={nx}x{ny}x{nz} (fixed), " 
           f"L={Lx*1000:.2f}mm, f={clock_frequency/1e9:.2f}GHz")
     
     try:
@@ -210,9 +198,10 @@ def evaluate_design(params):
 
 def parallel_evaluate(solutions):
     """Evaluate multiple solutions in parallel"""
-    with multiprocessing.Pool(processes=max(1, multiprocessing.cpu_count()-1)) as pool:
-        costs = pool.map(evaluate_design, solutions)
-    return costs
+    # with multiprocessing.Pool(processes=max(1, multiprocessing.cpu_count()-1)) as pool:
+    #     costs = pool.map(evaluate_design, solutions)
+    # return costs
+    return [evaluate_design(p) for p in solutions]
 
 def optimize_design(
     max_iterations=20, 
@@ -241,14 +230,16 @@ def optimize_design(
         os.makedirs(output_dir)
     
     # Initial design parameters
-    # Format: [V_boundary, k_0, nx, Lx (mm), clock_frequency (GHz)]
-    x0 = [10.0, 1.0, 5, 5.0, 1.0]
+    # Format: [V_boundary, k_0, Lx (mm), clock_frequency (GHz)]
+    # Removed nx from the parameters
+    x0 = [10.0, 1.0, 5.0, 1.0]
     
     # Parameter ranges (min, max)
-    # Format: [[min_V, min_k, min_nx, min_Lx, min_f], [max_V, max_k, max_nx, max_Lx, max_f]]
+    # Format: [[min_V, min_k, min_Lx, min_f], [max_V, max_k, max_Lx, max_f]]
+    # Removed nx from the bounds
     bounds = [
-        [5.0, 0.5, 5.0, 1.0, 0.5],   # Lower bounds - reduce min mesh size
-        [20.0, 5.0, 15.0, 10.0, 3.0]  # Upper bounds - reduce max mesh size
+        [5.0, 0.5, 1.0, 0.5],   # Lower bounds
+        [20.0, 5.0, 10.0, 3.0]  # Upper bounds
     ]
     
     # Initial step sizes (sigma)
@@ -269,6 +260,7 @@ def optimize_design(
     print(f"Starting CMA-ES optimization with {population_size} designs per generation")
     print(f"Maximum {max_iterations} generations")
     print(f"Parameter space: {bounds[0]} to {bounds[1]}")
+    print(f"Using fixed mesh size: 10x10x10")  # Added info about fixed mesh
     print(f"{'='*60}\n")
     
     # Initialize CMA-ES
@@ -303,9 +295,9 @@ def optimize_design(
         print(f"Best Parameters:")
         print(f"  Voltage: {best_params[0]:.2f} V")
         print(f"  Thermal Conductivity: {best_params[1]:.2f} W/m-K")
-        print(f"  Mesh Resolution: {int(best_params[2])}x{int(best_params[2])}x{int(best_params[2])}")
-        print(f"  IC Size: {best_params[3]:.2f} mm")
-        print(f"  Clock Frequency: {best_params[4]:.2f} GHz")
+        print(f"  IC Size: {best_params[2]:.2f} mm")
+        print(f"  Clock Frequency: {best_params[3]:.2f} GHz")
+        print(f"  Mesh Size: 10x10x10 (fixed)")  # Added info about fixed mesh
         print(f"Best Cost: {best_cost:.6f}")
         
         # Plot results
@@ -314,6 +306,10 @@ def optimize_design(
         # Run final simulation with best parameters for detailed analysis
         print("\nRunning final simulation with best parameters...")
         final_result = evaluate_design(best_params)
+
+        print('\n')
+        print(final_result)
+        print('\n')
         
         return {
             'best_params': best_params,
