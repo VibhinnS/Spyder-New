@@ -14,7 +14,7 @@ parameters["krylov_solver"]["nonzero_initial_guess"] = True
 
 def electro_thermal_timing_simulation(
     # Mesh parameters
-    nx=10, ny=10, nz=10,
+    nx=20, ny=20, nz=20,
     Lx=1.0, Ly=1.0, Lz=1.0,
     
     # Physical parameters
