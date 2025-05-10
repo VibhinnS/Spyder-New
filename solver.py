@@ -20,7 +20,7 @@ def electro_thermal_timing_simulation(
     # Physical parameters
     T_0=300.0,
     V_boundary=10.0,
-    T_boundary=300.0,
+    T_boundary=323.15,
     rho_0=1.0,
     alpha=0.004,
     k_0=1.0,
@@ -302,4 +302,43 @@ def plot_results(results, output_dir="./results"):
     print(f"Clock skew: {results['clock_skew']*1e12:.3f} ps")
     print(f"CPU time: {results['cpu_time']:.2f} seconds")
 
-# electro_thermal_timing_simulation()
+
+def validate_electro_thermal_timing_simulation():
+    # Run the simulation
+    results = electro_thermal_timing_simulation()
+
+    # 1. Validate Temperature Range
+    temp_range = results['temp_range']
+    assert 0 < temp_range < 50, f"Temperature range seems abnormal: {temp_range} K"
+
+    # 2. Validate Thermal Gradient
+    max_thermal_gradient = results['max_thermal_gradient']
+    assert 0 < max_thermal_gradient < 100, f"Max thermal gradient is too high: {max_thermal_gradient} K/m"
+
+    # 3. Validate Clock Skew
+    clock_skew = results['clock_skew'] * 1e12  # Convert to ps for easier interpretation
+    assert 0 < clock_skew < 1000, f"Clock skew seems too high: {clock_skew} ps"
+
+    # 4. Validate Power Density
+    power_density = results['power_density']
+    
+    # To evaluate the power_density, you should use `power_density.vector().get_local()` to extract the values
+    power_density_values = power_density.vector().get_local()
+    
+    # Check that all power densities are positive
+    assert np.all(power_density_values > 0), "Power density contains non-positive values!"
+
+    # 5. Validate Convergence
+    convergence = results['convergence']
+    assert len(convergence) > 0, "Convergence history is empty!"
+    assert convergence[-1] < 1e-4, f"Convergence not sufficient: {convergence[-1]}"
+
+    # 6. Check CPU Time
+    cpu_time = results['cpu_time']
+    assert cpu_time < 300, f"CPU time is too high: {cpu_time} seconds"
+
+    # If all checks pass, print a success message
+    print("Electro-Thermal Timing Simulation passed validation successfully!")
+
+# Run the validation test
+validate_electro_thermal_timing_simulation()
